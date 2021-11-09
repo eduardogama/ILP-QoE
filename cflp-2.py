@@ -34,11 +34,20 @@ cap_link = {
 	(6,6): 400000000,
 }
 
-argumentList = sys.argv[2:]
+argumentList = sys.argv[4:]
+
+argLink = [int(sys.argv[2]), int(sys.argv[3])]
+
 mapUserAp = {}
 
 current_users = int(sys.argv[1])
 
+
+
+print(argLink)
+print(argumentList)
+
+sys.stdin.read(1)
 
 with open("../content/scenario/btree_l3_nodes") as reader:
 	lines = reader.readlines()
@@ -56,6 +65,9 @@ with open("../content/scenario/btree_l3_link") as reader:
 		if line[0] == "#":
 			continue
 		link = line.split(" ")
+		
+		if int(link[0]) == argLink[0] and int(link[1]) == argLink[1]:
+			continue
 		links[( int(link[0]), int(link[1]) )] = [int(link[2]), int(link[4]), int(link[5])]
 		
 graph = [[0 for column in range(len(nodes)+current_users)] for row in range(len(nodes)+current_users)]
@@ -91,7 +103,7 @@ for i in users:
 	cparent = {}
 	
 	dist = [float("Inf")] * (len(nodes) + current_users)
-	usersPath[i] = g.dijkstra(graph,i,dst,dist,cparent)
+	usersPath[i] = g.dijkstra(graph,i,dst,dist,cparent, argLink[1])
 
 
 for i in usersPath:
