@@ -44,10 +44,10 @@ current_users = int(sys.argv[1])
 
 
 
-print(argLink)
-print(argumentList)
+#print(argLink)
+#print(argumentList)
 
-sys.stdin.read(1)
+#sys.stdin.read(1)
 
 with open("../content/scenario/btree_l3_nodes") as reader:
 	lines = reader.readlines()
