@@ -35,13 +35,15 @@ cap_link = {
 	(6,6): 400000000,
 }
 
-argumentList = sys.argv[4:]
+argumentList = sys.argv[5:]
 
-congestedLink = [int(sys.argv[2]), int(sys.argv[3])]
+outputfile = sys.argv[1]
 
 mapUserAp = {}
+current_users = int(sys.argv[2])
 
-current_users = int(sys.argv[1])
+congestedLink = [int(sys.argv[3]), int(sys.argv[4])]
+
 
 
 n_users   = 0
@@ -134,7 +136,7 @@ print(usersPath)
 print("costs", costs)
 print("nodes", nodes)
 print("nodes_1", nodes_1)
-sys.stdin.read(1)
+#sys.stdin.read(1)
 
 model = Model("CFLP")
 
@@ -206,7 +208,7 @@ if model.status == GRB.OPTIMAL:
 	print ("Facilities at nodes:", facilities)
 	print ("Edges:", edges)
 	
-	f = open("out.txt", "w")
+	f = open(outputfile, "w")
 	
 	for i,j,k in edges:
 		f.write(str(mapUserAp[i]) + " " + str(j) + "\n")

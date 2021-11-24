@@ -10,78 +10,48 @@ from gurobipy import *
  
 from collections import defaultdict
 
-
-with Env(empty=True) as env:
-	env.setParam('OutputFlag', 0)
-	env.start()
-
-
-class Graph:
-    def minDistance(self,dist,queue):
-        minimum = float("Inf")
-        min_index = -1
-         
-        for i in range(len(dist)):
-            if dist[i] < minimum and i in queue:
-                minimum = dist[i]
-                min_index = i
-        return min_index
-
-    def printPath(self, parent, j):
-        if parent[j] == -1 :
-            print (j),
-            return
-        self.printPath(parent , parent[j])
-        print (j),
-
-    def printSolution(self, dist, parent, src):
-        print("Vertex \t\tDistance from Source\tPath")
-        for i in range(1, len(dist)):
-            print("%d --> %d \t\t%d \t\t\t\t\t" % (src, i, dist[i])),
-            self.printPath(parent,i)
-
-    def dijkstra(self, graph, src, dst, dist, cparent):
-        parent = [-1] * len(graph)
-        row = len(graph)
-        col = len(graph[0])
- 
-        dist[src] = 0
-        queue = []
-        for i in range(row):
-            queue.append(i)
-             
-        while queue:
-            u = self.minDistance(dist,queue)
-            queue.remove(u)
-
-            for i in range(col):
-                if graph[u][i] and i in queue:
-                    if dist[u] + graph[u][i] < dist[i]:
-                        dist[i] = dist[u] + graph[u][i]
-                        parent[i] = u
-
-        path = []
-        i = dst
-        while parent[i] != -1:
-            path.insert(0,i)
-            cparent[dist[i]+1] = (i,parent[i])  
-            i = parent[i]
-        cparent[1] = (i,i)
-        path.insert(0,i)
-
-        return path
-
+from graph import *
 
 dst = 7
-maxBitrate = 4300000
+maxBitrate = 5800000
 
+users = {}
 nodes = {}
 links = {}
 
-capacity = {0:6, 1:4, 2:4, 3:2, 4:2, 5:2, 6:5, 7:10}
+capacity = {0:6, 1:4, 2:4, 3:2, 4:2, 5:2, 6:2, 7:10}
+
+cap_link = {
+	(7,0): 400000000,
+	(0,1): 20000000,
+	(0,2): 20000000,
+	(1,3): 30000000,
+	(1,4): 30000000,
+	(2,5): 30000000,
+	(2,6): 30000000,
+	(3,3): 400000000,
+	(4,4): 400000000,
+	(5,5): 400000000,
+	(6,6): 400000000,
+}
+
+argumentList = sys.argv[5:]
+
+outputfile = sys.argv[1]
+
+mapUserAp = {}
+current_users = int(sys.argv[2])
+
+congestedLink = [int(sys.argv[3]), int(sys.argv[4])]
 
 
-users = {}
+
+n_users   = 0
+usersPath = {}
+costs 	  = {}
+
+g = Graph()
+
 
 with open("../content/scenario/btree_l3_nodes") as reader:
 	lines = reader.readlines()
@@ -99,117 +69,103 @@ with open("../content/scenario/btree_l3_link") as reader:
 		if line[0] == "#":
 			continue
 		link = line.split(" ")
+		
+		if int(link[0]) == congestedLink[0] and int(link[1]) == congestedLink[1]:
+			continue
 		links[( int(link[0]), int(link[1]) )] = [int(link[2]), int(link[4]), int(link[5])]
 		
-graph = [[0 for column in range(len(nodes))] for row in range(len(nodes))]
+graph = [[0 for column in range(len(nodes)+current_users)] for row in range(len(nodes)+current_users)]
 for i in nodes:
 	for j in nodes:
 		if (i,j) in links:
 			graph[i][j] = 1
 			graph[j][i] = 1
 
+for i in range(0, len(argumentList), 4):
+	accessPoint = int(argumentList[i])
+	groupId		= int(argumentList[i+1])
+	groupIndex 	= int(argumentList[i+2])
+	groupSize 	= int(argumentList[i+3])
+	
+	users[groupId] 	  = groupSize
+	mapUserAp[groupId] = groupIndex
 
-usersPath = {}
-usersPathByEdge = {}
-lr = {}
-costs = {}
-flinks = {(i,j): links[i,j][0] for i,j in links}
-edges = [[0 for column in range(len(nodes))] for row in range(len(nodes))]
-
-g = Graph()
-for i in nodes:
-	if nodes[i][0] == "ap\n":
-		cparent = {}
-		
-		dist = [float("Inf")] * len(nodes)
-		usersPath[i] = g.dijkstra(graph,i,dst,dist,cparent)
-				
-		links[i,i] = [30000000, 0, 500]
-#		users[i] = 0
-		
-
-argumentList = sys.argv[1:]
-mapUserAp = {}
-for i in range(0, len(argumentList), 3):
-#	print(argumentList[i],argumentList[i+1])
-	users[int(argumentList[i])] = int(argumentList[i+2])
-	mapUserAp[int(argumentList[i])] = int(argumentList[i+1])
-
+	graph[accessPoint][groupId] = 1
+	graph[groupId][accessPoint] = 1
+	
+	cap_link[(groupId, accessPoint)] = 400000000
+	
 n_users = sum(users[i] for i in users)
 
-#users = {3:15, 4:4, 5:8, 6:4}
-#n_users = sum(users[i] for i in users)
 
-for i in usersPath:
-	lr[i] = []
-	cnt = 1
-	for p in usersPath[i]:
-		lr[i].append(cnt)
-		cnt = cnt + 1
-
-for i in usersPath:
-	n = len(usersPath[i])
-	usersPathByEdge[i] = []
-	usersPathByEdge[i].append((i,i))	
-	for j in range(n-1):
-		p1,p2 = (usersPath[i][j], usersPath[i][j+1])
+for i in users:
+	cparent = {}
 	
-		usersPathByEdge[i].append((p1,p2))
+	dist = [float("Inf")] * (len(nodes) + current_users)
+	
+	path = g.dijkstra(graph,i,dst,dist,cparent, congestedLink[1])
+	if congestedLink[1] in path:
+		usersPath[i] = path
+
 
 for i in usersPath:
 	if i in users:
 		for j in usersPath[i]:
-			nodes[j][1] += users[i]
-			
+			if j in nodes:
+				nodes[j][1] += users[i]
+
 for i in usersPath:
 	if i in users:
 		for j in usersPath[i]:
-			if (i,j) not in costs:
+			if (i,j) not in costs and i != j:
 				costs[(i,j)] = 0
-			costs[(i,j)] += users[i] * (1-nodes[j][1]/n_users)
+			
+			if j in nodes:
+				costs[(i,j)] += users[i] * (1-nodes[j][1]/n_users)
 
-#print("# users demand", users)
-#print("lr", lr)
-#print("uPath", usersPath)
-#print("usersPathByEdge", usersPathByEdge)
-#print("costs", costs)
-#print("flinks", flinks)
-#print("nodes", nodes)
-
-cap_link = {
-	(7,0): 400000000,
-	(0,1): 20000000,
-	(0,2): 20000000,
-	(1,3): 30000000,
-	(1,4): 30000000,
-	(2,5): 30000000,
-	(2,6): 30000000,
-	(3,3): 400000000,
-	(4,4): 400000000,
-	(5,5): 400000000,
-	(6,6): 400000000,
-}
+nodes_1 = {}
+for i in usersPath:
+	for j in usersPath[i]:
+		if i != j and j not in nodes_1:
+			nodes_1[j] = nodes[j]
+		
+		
+print("===============================")
+print(users)
+print(usersPath)
+print("costs", costs)
+print("nodes", nodes)
+print("nodes_1", nodes_1)
+#sys.stdin.read(1)
 
 model = Model("CFLP")
 
 model.Params.LogToConsole = 0
 
 x,y = {},{}
-y = model.addVars(nodes.keys(), vtype=GRB.BINARY, name="y(%s)"%j)
+y = model.addVars(nodes_1.keys(), vtype=GRB.BINARY, name="y(%s)"%j)
 x = model.addVars(costs.keys(), vtype=GRB.BINARY, name="x(%s,%s)"%(i,j))
 
-		
-#model.addConstrs(x.sum(i,'*') == users[i] for i in users)
-model.addConstrs(x.sum(i,'*') == 1 for i in users)
 
-model.addConstrs(quicksum(x[i,j] for i in users if (i,j) in x) <= y[j]*capacity[j] for j in capacity)
+print("==================================")
+print(costs.keys())
+print("==================================")
+print(nodes)
+
+#model.addConstrs(x.sum(i,'*') == users[i] for i in users)
+model.addConstrs(x.sum(i,'*') == 1 for i in usersPath)
+
+model.addConstrs(
+		quicksum(x[i,j] for i in users if (i,j) in x) <= y[j]*capacity[j] 
+		for j in nodes_1
+	)
 
 model.addConstrs(x[i,j] <= users[i]*y[j] for (i,j) in costs.keys())
 
 
 model.setObjective(
-		quicksum(capacity[j]*y[j] for j in capacity) +
-        quicksum(costs[i,j]*x[i,j] for i in users for j in nodes if (i,j) in x),
+		quicksum(capacity[j]*y[j] for j in nodes_1) +
+        quicksum(costs[i,j]*x[i,j] for i in usersPath for j in nodes_1 if (i,j) in x),
         GRB.MINIMIZE)
 
 def subtourelim(model, where):
@@ -217,24 +173,25 @@ def subtourelim(model, where):
 		vals = model.cbGetSolution(model._vars)
 		
 		selected = tuplelist((i,j) for i,j in model._vars.keys() if vals[i,j] > 0.5)
-#		print("l_r", selected)
 		
 		path = {}
 		for (i,j) in selected:
-			path[(i,j)] = [(i,i)]
+			path[(i,j)] = []
 			for p in range(len(usersPath[i])-1):
 				if usersPath[i][p] == j:
 					break
 				path[(i,j)].append((usersPath[i][p],usersPath[i][p+1]))
-				
+
+#		print(path[(i,j)])
+#		print(selected)
+
 		for (i,j) in selected:
 			for p1,p2 in path[(i,j)]:
 				if (p2,p1) in cap_link:
-#					print("->",(p2,p1), vals[i,j], cap_link[(p2,p1)], vals[i,j] * maxBitrate <= cap_link[(p2,p1)])
 					aux = p1
 					p1 = p2
 					p2 = aux
-					
+#				print(p1,p2)
 				model.cbLazy(model._vars[i,j] * maxBitrate * users[i] <= cap_link[p1,p2])
 
 model._vars = x
@@ -251,7 +208,7 @@ if model.status == GRB.OPTIMAL:
 	print ("Facilities at nodes:", facilities)
 	print ("Edges:", edges)
 	
-	f = open("out.txt", "w")
+	f = open(outputfile, "w")
 	
 	for i,j,k in edges:
 		f.write(str(mapUserAp[i]) + " " + str(j) + "\n")
