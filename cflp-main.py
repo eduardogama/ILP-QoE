@@ -40,127 +40,143 @@ n_users = 0
 usersPath = {}
 costs = {}
 
-g = Graph()
 
+def main():
+    netGraph = Graph()
 
-with open("../content/scenario/btree_l3_nodes") as reader:
-    lines = reader.readlines()
+    with open("../content/scenario/btree_l3_nodes") as reader:
+        lines = reader.readlines()
 
-    for line in lines:
-        if line[0] == "#":
-            continue
-        node = line.split(" ")
-        nodes[int(node[0])] = [node[1], 0]
+        for line in lines:
+            if line[0] == "#":
+                continue
+            node = line.split(" ")
+            nodes[int(node[0])] = [node[1], 0]
 
-with open("../content/scenario/btree_l3_link") as reader:
-    lines = reader.readlines()
+    with open("../content/scenario/btree_l3_link") as reader:
+        lines = reader.readlines()
 
-    for line in lines:
-        if line[0] == "#":
-            continue
-        link = line.split(" ")
+        for line in lines:
+            if line[0] == "#":
+                continue
+            link = line.split(" ")
 
-        if int(link[0]) == congestedLink[0] and int(link[1]) == congestedLink[1]:
-            continue
-        links[(int(link[0]), int(link[1]))] = [int(link[2]), int(link[4]), int(link[5])]
+            if int(link[0]) == congestedLink[0] and int(link[1]) == congestedLink[1]:
+                continue
+            links[(int(link[0]), int(link[1]))] = [int(link[2]), int(link[4]), int(link[5])]
 
-graph = [[0 for column in range(len(nodes)+current_users)] for row in range(len(nodes)+current_users)]
-for i in nodes:
-    for j in nodes:
-        if (i, j) in links:
-            graph[i][j] = 1
-            graph[j][i] = 1
+    graph = [[0 for column in range(len(nodes)+current_users)] for row in range(len(nodes)+current_users)]
+    for i in nodes:
+        for j in nodes:
+            if (i, j) in links:
+                graph[i][j] = 1
+                graph[j][i] = 1
 
-for i in range(0, len(argumentList), 4):
-    accessPoint = int(argumentList[i])
-    groupId = int(argumentList[i+1])
-    groupIndex = int(argumentList[i+2])
-    groupSize = int(argumentList[i+3])
+    for i in range(0, len(argumentList), 4):
+        accessPoint = int(argumentList[i])
+        groupId = int(argumentList[i+1])
+        groupIndex = int(argumentList[i+2])
+        groupSize = int(argumentList[i+3])
 
-    users[groupId] = groupSize
-    mapUserAp[groupId] = groupIndex
+        users[groupId] = groupSize
+        mapUserAp[groupId] = groupIndex
 
-    graph[accessPoint][groupId] = 1
-    graph[groupId][accessPoint] = 1
+        graph[accessPoint][groupId] = 1
+        graph[groupId][accessPoint] = 1
 
-    cap_link[(groupId, accessPoint)] = 400000000
+        cap_link[(groupId, accessPoint)] = 400000000
 
-n_users = sum(users[i] for i in users)
+    n_users = sum(users[i] for i in users)
 
+    for i in users:
+        cparent = {}
 
-for i in users:
-    cparent = {}
+        dist = [float("Inf")] * (len(nodes) + current_users)
 
-    dist = [float("Inf")] * (len(nodes) + current_users)
+        path = netGraph.dijkstra(graph, i, dst, dist, cparent, congestedLink[1])
+        if congestedLink[1] in path:
+            usersPath[i] = path
 
-    path = g.dijkstra(graph, i, dst, dist, cparent, congestedLink[1])
-    if congestedLink[1] in path:
-        usersPath[i] = path
+    for i in usersPath:
+        if i in users:
+            for j in usersPath[i]:
+                if j in nodes:
+                    nodes[j][1] += users[i]
 
+    for i in usersPath:
+        if i in users:
+            for j in usersPath[i]:
+                if (i, j) not in costs and i != j:
+                    costs[(i, j)] = 0
 
-for i in usersPath:
-    if i in users:
+                if j in nodes:
+                    costs[(i, j)] += users[i] * (1-nodes[j][1]/n_users)
+
+    nodes_1 = {}
+    for i in usersPath:
         for j in usersPath[i]:
-            if j in nodes:
-                nodes[j][1] += users[i]
+            if i != j and j not in nodes_1:
+                nodes_1[j] = nodes[j]
 
-for i in usersPath:
-    if i in users:
-        for j in usersPath[i]:
-            if (i, j) not in costs and i != j:
-                costs[(i, j)] = 0
+    # print("===============================")
+    # print(users)
+    # print(usersPath)
+    # print("costs", costs)
+    # print("nodes", nodes)
+    # print("nodes_1", nodes_1)
+    # sys.stdin.read(1)
+    env = Env(empty=True)
+    env.setParam('OutputFlag', 0)
+    env.start()
 
-            if j in nodes:
-                costs[(i, j)] += users[i] * (1-nodes[j][1]/n_users)
+    model = Model(env=env)
 
-nodes_1 = {}
-for i in usersPath:
-    for j in usersPath[i]:
-        if i != j and j not in nodes_1:
-            nodes_1[j] = nodes[j]
+    model.Params.LogToConsole = 0
 
+    x, y = {}, {}
+    y = model.addVars(nodes_1.keys(), vtype=GRB.BINARY, name="y(%s)" % j)
+    x = model.addVars(costs.keys(), vtype=GRB.BINARY, name="x(%s,%s)" % (i, j))
 
-# print("===============================")
-# print(users)
-# print(usersPath)
-# print("costs", costs)
-# print("nodes", nodes)
-# print("nodes_1", nodes_1)
-# sys.stdin.read(1)
-env = Env(empty=True)
-env.setParam('OutputFlag', 0)
-env.start()
+    # print("==================================")
+    # print(costs.keys())
+    # print("==================================")
+    # print(nodes)
 
-model = Model(env=env)
+    # model.addConstrs(x.sum(i,'*') == users[i] for i in users)
+    model.addConstrs(x.sum(i, '*') == 1 for i in usersPath)
 
-model.Params.LogToConsole = 0
+    model.addConstrs(
+        quicksum(x[i, j] for i in users if (i, j) in x) <= y[j]*capacity[j]
+        for j in nodes_1
+    )
 
-x, y = {}, {}
-y = model.addVars(nodes_1.keys(), vtype=GRB.BINARY, name="y(%s)" % j)
-x = model.addVars(costs.keys(), vtype=GRB.BINARY, name="x(%s,%s)" % (i, j))
+    model.addConstrs(x[i, j] <= users[i]*y[j] for (i, j) in costs.keys())
 
+    model.setObjective(
+        quicksum(capacity[j]*y[j] for j in nodes_1) +
+        quicksum(costs[i, j]*x[i, j] for i in usersPath for j in nodes_1 if (i, j) in x),
+        GRB.MINIMIZE
+    )
 
-# print("==================================")
-# print(costs.keys())
-# print("==================================")
-# print(nodes)
+    model._vars = x
+    model.Params.lazyConstraints = 1
+    model.optimize(subtourelim)
 
-# model.addConstrs(x.sum(i,'*') == users[i] for i in users)
-model.addConstrs(x.sum(i, '*') == 1 for i in usersPath)
+    if model.status == GRB.OPTIMAL:
+        EPS = 1.e-6
 
-model.addConstrs(
-    quicksum(x[i, j] for i in users if (i, j) in x) <= y[j]*capacity[j]
-    for j in nodes_1
-)
+        edges = [(i, j, x[i, j].x) for (i, j) in x if x[i, j].x > EPS]
+        facilities = [j for j in y if y[j].x > EPS]
 
-model.addConstrs(x[i, j] <= users[i]*y[j] for (i, j) in costs.keys())
+        print("Optimal value=", model.objVal)
+        print("Facilities at nodes:", facilities)
+        print("Edges:", edges)
 
+        f = open(outputfile, "w")
 
-model.setObjective(
-    quicksum(capacity[j]*y[j] for j in nodes_1) +
-    quicksum(costs[i, j]*x[i, j] for i in usersPath for j in nodes_1 if (i, j) in x),
-    GRB.MINIMIZE
-)
+        for i, j, k in edges:
+            f.write(str(mapUserAp[i]) + " " + str(j) + "\n")
+        f.close()
 
 
 def subtourelim(model, where):
@@ -190,22 +206,5 @@ def subtourelim(model, where):
                 model.cbLazy(model._vars[i, j] * maxBitrate * users[i] <= cap_link[p1, p2])
 
 
-model._vars = x
-model.Params.lazyConstraints = 1
-model.optimize(subtourelim)
-
-if model.status == GRB.OPTIMAL:
-    EPS = 1.e-6
-
-    edges = [(i, j, x[i, j].x) for (i, j) in x if x[i, j].x > EPS]
-    facilities = [j for j in y if y[j].x > EPS]
-
-    print("Optimal value=", model.objVal)
-    print("Facilities at nodes:", facilities)
-    print("Edges:", edges)
-
-    f = open(outputfile, "w")
-
-    for i, j, k in edges:
-        f.write(str(mapUserAp[i]) + " " + str(j) + "\n")
-    f.close()
+if __name__ == '__main__':
+    main()
