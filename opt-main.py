@@ -3,6 +3,7 @@ import sys
 from gurobipy import Model, GRB, Env, quicksum, tuplelist
 from common import maxBitrate, cap_link, capacity
 from graph import Graph
+from collections import defaultdict
 
 
 users = {}
@@ -14,15 +15,21 @@ mapUserAp = {}
 
 
 def main():
+
+    """ READ FILE INPUTS """
     dst = 7
-    argumentList = sys.argv[5:]
-    outputfile = sys.argv[1]
-    current_users = int(sys.argv[2])
-    congestedLink = [int(sys.argv[3]), int(sys.argv[4])]
+    argumentList = sys.argv[4:]
+    current_users = int(sys.argv[1])
+    congestedLink = [int(sys.argv[2]), int(sys.argv[3])]
+
+    # sim_params = {
+    #     'dst': 7,
+    #     'argumentList': sys.argv[4:],
+    #     'n_users': int(sys.argv[1]),
+    #     'congestedLink': [int(sys.argv[2]), int(sys.argv[3])]
+    # }
 
     n_users = 0
-
-    netGraph = Graph()
 
     with open("../content/scenario/btree_l3_nodes") as reader:
         lines = reader.readlines()
@@ -46,11 +53,9 @@ def main():
             links[(int(link[0]), int(link[1]))] = [int(link[2]), int(link[4]), int(link[5])]
 
     graph = [[0 for column in range(len(nodes)+current_users)] for row in range(len(nodes)+current_users)]
-    for i in nodes:
-        for j in nodes:
-            if (i, j) in links:
-                graph[i][j] = 1
-                graph[j][i] = 1
+    for i, j in links:
+        graph[i][j] = 1
+        graph[j][i] = 1
 
     for i in range(0, len(argumentList), 4):
         accessPoint = int(argumentList[i])
@@ -67,6 +72,9 @@ def main():
         cap_link[(groupId, accessPoint)] = 400000000
 
     n_users = sum(users[i] for i in users)
+    """ END READ FILE INPUTS """
+
+    netGraph = Graph()
 
     for i in users:
         cparent = {}
@@ -90,7 +98,7 @@ def main():
                     costs[(i, j)] = 0
 
                 if j in nodes:
-                    costs[(i, j)] += users[i] * (1-nodes[j][1]/n_users)
+                    costs[(i, j)] += users[i] * (nodes[j][1]/n_users)
 
     nodes_1 = {}
     for i in usersPath:
@@ -118,7 +126,12 @@ def main():
     x = model.addVars(costs.keys(), vtype=GRB.BINARY, name="x(%s,%s)" % (i, j))
 
     # print("==================================")
-    # print(costs.keys())
+    print(costs)
+    edges = defaultdict(int)
+    for i, j in costs:
+        print(costs[(i, j)])
+        edges[j] += costs[(i, j)]
+    print(edges)
     # print("==================================")
     # print(nodes)
 
@@ -133,9 +146,9 @@ def main():
     model.addConstrs(x[i, j] <= users[i]*y[j] for (i, j) in costs.keys())
 
     model.setObjective(
-        quicksum(capacity[j]*y[j] for j in nodes_1) +
-        quicksum(costs[i, j]*x[i, j] for i in usersPath for j in nodes_1 if (i, j) in x),
-        GRB.MINIMIZE
+        quicksum(costs[i, j]*x[i, j] for i in usersPath for j in nodes_1 if (i, j) in x) +
+        quicksum(capacity[j]*y[j] for j in nodes_1),
+        GRB.MAXIMIZE
     )
 
     model._vars = x
@@ -152,11 +165,8 @@ def main():
         print("Facilities at nodes:", facilities)
         print("Edges:", edges)
 
-        f = open(outputfile, "w")
-
         for i, j, k in edges:
-            f.write(str(mapUserAp[i]) + " " + str(j) + "\n")
-        f.close()
+            print(str(mapUserAp[i]) + " " + str(j))
 
 
 def subtourelim(model, where):

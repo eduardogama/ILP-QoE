@@ -15,10 +15,9 @@ mapUserAp = {}
 
 def main():
     dst = 7
-    argumentList = sys.argv[5:]
-    outputfile = sys.argv[1]
-    current_users = int(sys.argv[2])
-    congestedLink = [int(sys.argv[3]), int(sys.argv[4])]
+    argumentList = sys.argv[4:]
+    current_users = int(sys.argv[1])
+    congestedLink = [int(sys.argv[2]), int(sys.argv[3])]
 
     n_users = 0
 
@@ -146,17 +145,17 @@ def main():
         EPS = 1.e-6
 
         edges = [(i, j, x[i, j].x) for (i, j) in x if x[i, j].x > EPS]
-        facilities = [j for j in y if y[j].x > EPS]
+        # facilities = [j for j in y if y[j].x > EPS]
 
-        print("Optimal value=", model.objVal)
-        print("Facilities at nodes:", facilities)
-        print("Edges:", edges)
+        # print("Optimal value=", model.objVal)
+        # print("Facilities at nodes:", facilities)
+        # print("Edges:", edges)
 
-        f = open(outputfile, "w")
+        # f = open(outputfile, "w")
 
         for i, j, k in edges:
-            f.write(str(mapUserAp[i]) + " " + str(j) + "\n")
-        f.close()
+            print(str(mapUserAp[i]) + " " + str(j))
+        # f.close()
 
 
 def subtourelim(model, where):
