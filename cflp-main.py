@@ -22,6 +22,7 @@ def main():
 
     n_users = 0
 
+<<<<<<< HEAD
     netGraph = Graph()
 
     with open("../content/scenario/btree_l3_nodes") as reader:
@@ -82,6 +83,84 @@ def main():
             for j in usersPath[i]:
                 if j in nodes:
                     nodes[j][1] += users[i]
+=======
+
+def main():
+    netGraph = Graph()
+
+    with open("../content/scenario/btree_l3_nodes") as reader:
+        lines = reader.readlines()
+
+        for line in lines:
+            if line[0] == "#":
+                continue
+            node = line.split(" ")
+            nodes[int(node[0])] = [node[1], 0]
+
+    with open("../content/scenario/btree_l3_link") as reader:
+        lines = reader.readlines()
+
+        for line in lines:
+            if line[0] == "#":
+                continue
+            link = line.split(" ")
+
+            if int(link[0]) == congestedLink[0] and int(link[1]) == congestedLink[1]:
+                continue
+            links[(int(link[0]), int(link[1]))] = [int(link[2]), int(link[4]), int(link[5])]
+
+    graph = [[0 for column in range(len(nodes)+current_users)] for row in range(len(nodes)+current_users)]
+    for i in nodes:
+        for j in nodes:
+            if (i, j) in links:
+                graph[i][j] = 1
+                graph[j][i] = 1
+
+    for i in range(0, len(argumentList), 4):
+        accessPoint = int(argumentList[i])
+        groupId = int(argumentList[i+1])
+        groupIndex = int(argumentList[i+2])
+        groupSize = int(argumentList[i+3])
+
+        users[groupId] = groupSize
+        mapUserAp[groupId] = groupIndex
+
+        graph[accessPoint][groupId] = 1
+        graph[groupId][accessPoint] = 1
+
+        cap_link[(groupId, accessPoint)] = 400000000
+
+    n_users = sum(users[i] for i in users)
+
+    for i in users:
+        cparent = {}
+
+        dist = [float("Inf")] * (len(nodes) + current_users)
+
+        path = netGraph.dijkstra(graph, i, dst, dist, cparent, congestedLink[1])
+        if congestedLink[1] in path:
+            usersPath[i] = path
+>>>>>>> 4f8c76a71e673db65de376676f15a4baa3d3d3aa
+
+    for i in usersPath:
+        if i in users:
+            for j in usersPath[i]:
+<<<<<<< HEAD
+                if (i, j) not in costs and i != j:
+                    costs[(i, j)] = 0
+
+                if j in nodes:
+                    costs[(i, j)] += users[i] * (1-nodes[j][1]/n_users)
+
+    nodes_1 = {}
+    for i in usersPath:
+        for j in usersPath[i]:
+            if i != j and j not in nodes_1:
+                nodes_1[j] = nodes[j]
+
+=======
+                if j in nodes:
+                    nodes[j][1] += users[i]
 
     for i in usersPath:
         if i in users:
@@ -98,6 +177,7 @@ def main():
             if i != j and j not in nodes_1:
                 nodes_1[j] = nodes[j]
 
+>>>>>>> 4f8c76a71e673db65de376676f15a4baa3d3d3aa
     # print("===============================")
     # print(users)
     # print(usersPath)
