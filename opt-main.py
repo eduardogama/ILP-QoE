@@ -3,8 +3,7 @@ import sys
 from gurobipy import Model, GRB, Env, quicksum, tuplelist
 from common import maxBitrate, cap_link, capacity
 from graph import Graph
-from collections import defaultdict
-
+from collections import defaultdict  # noqa: F401
 
 users = {}
 nodes = {}
@@ -30,7 +29,6 @@ def main():
     # }
 
     n_users = 0
-
     with open("../content/scenario/btree_l3_nodes") as reader:
         lines = reader.readlines()
 
@@ -85,69 +83,76 @@ def main():
         if congestedLink[1] in path:
             usersPath[i] = path
 
-    for i in usersPath:
-        if i in users:
-            for j in usersPath[i]:
-                if j in nodes:
-                    nodes[j][1] += users[i]
-
-    for i in usersPath:
-        if i in users:
-            for j in usersPath[i]:
-                if (i, j) not in costs and i != j:
-                    costs[(i, j)] = 0
-
-                if j in nodes:
-                    costs[(i, j)] += users[i] * (nodes[j][1]/n_users)
-
-    nodes_1 = {}
+    # Compute the number of users passing through each node in matrix nodes
     for i in usersPath:
         for j in usersPath[i]:
-            if i != j and j not in nodes_1:
-                nodes_1[j] = nodes[j]
+            if j in nodes:
+                nodes[j][1] += users[i]
+
+    # Compute the costs dict for each users and nodes
+    # Here, we are using the formula: c(i,j) = <# users> * <probability of users requests>
+    # i: node; j: user group
+    for i in usersPath:
+        for j in usersPath[i]:
+            if (i, j) not in costs and i != j:
+                costs[(i, j)] = 0
+
+            if j in nodes:
+                costs[(i, j)] += users[i] * (nodes[j][1]/n_users)
+
+    nodes_subset = {}
+    for i in usersPath:
+        for j in usersPath[i]:
+            if i != j and j not in nodes_subset:
+                nodes_subset[j] = nodes[j]
 
     # print("===============================")
     # print(users)
-    # print(usersPath)
-    # print("costs", costs)
     # print("nodes", nodes)
-    # print("nodes_1", nodes_1)
+    # print(usersPath)
+    # print("nodes_subset", nodes_subset)
+    # print("costs", costs)
     # sys.stdin.read(1)
+
+    """ START OPTIMIZATION MODEL """
     env = Env(empty=True)
     env.setParam('OutputFlag', 0)
     env.start()
 
     model = Model(env=env)
 
-    model.Params.LogToConsole = 0
-
     x, y = {}, {}
-    y = model.addVars(nodes_1.keys(), vtype=GRB.BINARY, name="y(%s)" % j)
+    y = model.addVars(nodes_subset.keys(), vtype=GRB.BINARY, name="y(%s)" % j)
     x = model.addVars(costs.keys(), vtype=GRB.BINARY, name="x(%s,%s)" % (i, j))
 
-    # print("==================================")
-    print(costs)
+    print("==================================")
     edges = defaultdict(int)
     for i, j in costs:
-        print(costs[(i, j)])
         edges[j] += costs[(i, j)]
     print(edges)
-    # print("==================================")
-    # print(nodes)
+    print("==================================")
 
-    # model.addConstrs(x.sum(i,'*') == users[i] for i in users)
     model.addConstrs(x.sum(i, '*') == 1 for i in usersPath)
 
+    for i, j in x:
+        print(i, j)
+    print("-")
+    
+    for j in nodes_subset:
+        for i in usersPath:
+            if (i, j) in x:
+                print(i, j)
+
     model.addConstrs(
-        quicksum(x[i, j] for i in users if (i, j) in x) <= y[j]*capacity[j]
-        for j in nodes_1
+        quicksum(x[i, j] for i in usersPath if (i, j) in x) <= y[j]*capacity[j]
+        for j in nodes_subset
     )
 
     model.addConstrs(x[i, j] <= users[i]*y[j] for (i, j) in costs.keys())
 
     model.setObjective(
-        quicksum(costs[i, j]*x[i, j] for i in usersPath for j in nodes_1 if (i, j) in x) +
-        quicksum(capacity[j]*y[j] for j in nodes_1),
+        quicksum(costs[i, j]*x[i, j] for i in usersPath for j in nodes_subset if (i, j) in x) +
+        quicksum(capacity[j]*y[j] for j in nodes_subset),
         GRB.MAXIMIZE
     )
 
@@ -189,9 +194,7 @@ def subtourelim(model, where):
         for (i, j) in selected:
             for p1, p2 in path[(i, j)]:
                 if (p2, p1) in cap_link:
-                    aux = p1
-                    p1 = p2
-                    p2 = aux
+                    p1, p2 = p2, p1
                 # print(p1,p2)
                 model.cbLazy(model._vars[i, j] * maxBitrate * users[i] <= cap_link[p1, p2])
 
